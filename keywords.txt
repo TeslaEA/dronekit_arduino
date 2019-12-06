@@ -1,0 +1,24 @@
+#######################################
+# Syntax Coloring Map For Ultrasound
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+
+Dronekit	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+
+connect	KEYWORD2
+close	KEYWORD2
+request_data	KEYWORD2
+send_data	KEYWORD2
+receive_data	KEYWORD2
+
+#######################################
+# Constants (LITERAL1)
+#######################################
+
