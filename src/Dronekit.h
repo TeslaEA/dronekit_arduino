@@ -6,21 +6,49 @@
 #define Dronekit_h
  
 #include "Arduino.h"
-#include <WiFiUdp.h>
+#include <ESP8266WiFi.h>
+#include "ESPAsyncUDP.h"
 #include "../src/mavlink/common/mavlink.h"
 
 class Dronekit
 {
   public:
     Dronekit();
-	WiFiUDP udp;
-	
-    uint8_t connect(int);
-    void close();
+	//WiFiUDP udp;
+	AsyncUDP udp;
+
+    	uint8_t connect(int,int);
+    	void close();
 	void request_data();
+	void update();
+	bool arm();
+	bool disarm();
+	bool setMode();
+	bool takeoff();
+	bool land();
+	bool setVelocity();
+	
+	
 	int send_data( uint8_t* buf , uint16_t len);
 	mavlink_message_t receive_data();
 	int _port;
+	
+	bool armed;
+	int mode;
+	
+	uint16_t bat_volt;
+	int16_t bat_amp;
+	
+	float roll;
+	float pitch;
+	float yaw;
+	
+	
+	int max_stream = 1;
+	int stream_rate[];
+	int stream_msg[];
+	
+	
 	
   private:
 	uint8_t _buf_len = 1000;
@@ -28,4 +56,21 @@ class Dronekit
 	
 };
  
+ 
+ class Attitude
+ {
+	public:
+		Attitude();
+		uint8_t roll;
+		uint8_t pitch;
+		uint8_t yaw;
+		
+ };
+ 
+ class Altitude
+ {
+	public:
+		uint8_t baroAlt;
+		uint8_t rangeAlt;
+ } ;
 #endif
