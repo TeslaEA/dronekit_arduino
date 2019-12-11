@@ -92,6 +92,27 @@ void Dronekit::request_data()
   }
 }
 
+void Dronekit::arm()
+{
+	mavlink_message_t msg;
+	uint8_t buf[MAVLINK_MAX_PACKET_LEN];
+	mavlink_msg_command_long_pack(2, 200, &msg,1,1, MAV_CMD_COMPONENT_ARM_DISARM, 0, 1, 21196,0, 0, 0, 0, 0);
+	uint16_t len = mavlink_msg_to_send_buffer(buf, &msg);
+
+	this->send_data(buf, len);
+	
+}
+
+void Dronekit::disarm()
+{
+	mavlink_message_t msg;
+	uint8_t buf[MAVLINK_MAX_PACKET_LEN];
+	mavlink_msg_command_long_pack(2, 200, &msg,1,1, MAV_CMD_COMPONENT_ARM_DISARM, 0, 0, 21196,0, 0, 0, 0, 0);
+	uint16_t len = mavlink_msg_to_send_buffer(buf, &msg);
+
+	this->send_data(buf, len);
+	
+}
 
 mavlink_message_t Dronekit::receive_data(AsyncUDPPacket *packet)
 {

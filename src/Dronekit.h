@@ -21,8 +21,8 @@ class Dronekit
     	void close();
 	void request_data();
 	void update();
-	bool arm();
-	bool disarm();
+	void arm();
+	void disarm();
 	bool setMode();
 	bool takeoff();
 	bool land();
