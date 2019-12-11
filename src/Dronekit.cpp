@@ -10,49 +10,33 @@ Dronekit::Dronekit()
 	
 }
 
-uint8_t Dronekit::connect(int h_port,int c_port)
+uint8_t Dronekit::connect(int h_port, int c_port)
 {
 	_buf_len = 500;
-	//_port = port;
+	_hport = h_port;
+	_cport = c_port;
 	
-	//uint8_t c = this->udp.begin(_port);
-
-	if(udp.connect(WiFi.gatewayIP(), h_port)) {
+	if(udp.listen( _hport)) {
         	Serial.println("UDP connected");
-        	Serial.println(udp.listen(WiFi.gatewayIP(), c_port));
-        	udp.onPacket([](AsyncUDPPacket packet) {
-            		Serial.print("UDP Packet Type: ");
-            		Serial.print(packet.isBroadcast()?"Broadcast":packet.isMulticast()?"Multicast":"Unicast");
-            		Serial.print(", From: ");
-            		Serial.print(packet.remoteIP());
-            		Serial.print(":");
-            		Serial.print(packet.remotePort());
-            		Serial.print(", To: ");
-            		Serial.print(packet.localIP());
-            		Serial.print(":");
-            		Serial.print(packet.localPort());
-            		Serial.print(", Length: ");
-            		Serial.print(packet.length());
-            		Serial.print(", Data: ");
-            		Serial.write(packet.data(), packet.length());
-            		Serial.println();
-            //reply to the client
-            //packet.printf("Got %u bytes of data", packet.length());
-        });
+        	udp.onPacket([this](AsyncUDPPacket packet) 
+			{
+			this->receive_data(&packet);	
+			//Serial.print("recv:");
+			//Serial.write(packet.data(), packet.length());
+            //Serial.println();
+			});
 	}
 	return 1;
 }
 
 void Dronekit::close()
 {
-	Dronekit::udp.stop();
+	Dronekit::udp.close();
 }
 
-int Dronekit::send_data( uint8_t* buf, uint16_t len)
-{
-	int result = this->udp.beginPacket(this->udp.remoteIP(), this->udp.remotePort());
-	this->udp.write(buf, len);
-	this->udp.endPacket();
+size_t Dronekit::send_data( uint8_t* buf, uint16_t len)
+{	
+	size_t result = this->udp.writeTo(buf,len,WiFi.gatewayIP(),_cport);
 	return result; 
 }
 
@@ -83,7 +67,7 @@ void Dronekit::request_data()
 
   // To be setup according to the needed information to be requested from the Pixhawk
   this->stream_msg[this->max_stream] = {MAV_DATA_STREAM_ALL};
-  this->stream_rate[this->max_stream] = {0x02};
+  this->stream_rate[this->max_stream] = {0x05};
 
   for (int i = 0; i < this->max_stream; i++) {
     /*
@@ -99,92 +83,59 @@ void Dronekit::request_data()
 
     */
 
-    mavlink_msg_request_data_stream_pack(2, 200, &msg, 1, 0, this->stream_msg[i], this->stream_rate[i], 1);
+    mavlink_msg_request_data_stream_pack(2, 200, &msg, 1, 1, this->stream_msg[i], this->stream_rate[i], 1);
+
     uint16_t len = mavlink_msg_to_send_buffer(buf, &msg);
-	
+
 	this->send_data(buf, len);
 	
   }
 }
 
 
-/*mavlink_message_t Dronekit::receive_data()
+mavlink_message_t Dronekit::receive_data(AsyncUDPPacket *packet)
 {
-	
-	uint8_t packetBuffer[_buf_len] ;
-	memset(packetBuffer, 0, _buf_len);
-	int packetSize = this->udp.parsePacket();
-	int p = this->udp.read(packetBuffer, _buf_len);
-	if (packetSize) 
+	//packet.data(), 
+	//uint8_t packetBuffer[_buf_len] ;
+	//memset(packetBuffer, 0, _buf_len);
+	if (packet->length()) 
 	{
 		mavlink_message_t msg;
 		mavlink_status_t stat;
-		for (int i = 0; i < packetSize; ++i)
+		for (int i = 0; i < packet->length(); ++i)
 		{
-			if (mavlink_parse_char(MAVLINK_COMM_0, packetBuffer[i], &msg, &stat)) 
+			if (mavlink_parse_char(MAVLINK_COMM_0, packet->data()[i], &msg, &stat)) 
 			{
-				return msg;
+				switch (msg.msgid)
+				{
+				case MAVLINK_MSG_ID_HEARTBEAT:
+		
+					mavlink_heartbeat_t hb;
+					mavlink_msg_heartbeat_decode(&msg, &hb);
+					if (hb.base_mode == 209) {this->armed = true;} else {this->armed = false;}
+					this->mode = hb.custom_mode;
+		
+					break;
+				case MAVLINK_MSG_ID_SYS_STATUS:  // #1: SYS_STATUS
+        
+					mavlink_sys_status_t sys_status;
+					mavlink_msg_sys_status_decode(&msg, &sys_status);
+					this->bat_volt = sys_status.voltage_battery;
+					this->bat_amp = sys_status.current_battery;
+        
+        				break;
+				case MAVLINK_MSG_ID_ATTITUDE:  // #30
+            
+              				mavlink_attitude_t attitude;
+              				mavlink_msg_attitude_decode(&msg, &attitude);
+              				this->roll = attitude.roll;
+			  		this->pitch = attitude.pitch;
+			  		this->yaw = attitude.yaw;
+            
+            				break;
+				}
 			}
 		}
-    }
-}*/
-
-mavlink_message_t Dronekit::receive_data()
-{
-	
-	uint8_t packetBuffer[_buf_len] ;
-	memset(packetBuffer, 0, _buf_len);
-	int packetSize = this->udp.parsePacket();
-	int p = this->udp.read(packetBuffer, _buf_len);
-	if (packetSize) 
-	{
-		mavlink_message_t msg;
-		mavlink_status_t stat;
-		for (int i = 0; i < packetSize; ++i)
-		{
-			if (mavlink_parse_char(MAVLINK_COMM_0, packetBuffer[i], &msg, &stat)) 
-			{
-				return msg;
-			}
-		}
-    }
+    	}
 }
 
-void Dronekit::update()
-{
-	this->request_data();
-	mavlink_message_t recv_m;
-	recv_m = this->receive_data();
-	switch (recv_m.msgid)
-	{
-		case MAVLINK_MSG_ID_HEARTBEAT:
-		
-			mavlink_heartbeat_t hb;
-			mavlink_msg_heartbeat_decode(&recv_m, &hb);
-			if (hb.base_mode == 209) {this->armed = true;} else {this->armed = false;}
-			this->mode = hb.custom_mode;
-		
-		break;
-		case MAVLINK_MSG_ID_SYS_STATUS:  // #1: SYS_STATUS
-        
-			mavlink_sys_status_t sys_status;
-			mavlink_msg_sys_status_decode(&recv_m, &sys_status);
-			this->bat_volt = sys_status.voltage_battery;
-			this->bat_amp = sys_status.current_battery;
-        
-        break;
-		case MAVLINK_MSG_ID_ATTITUDE:  // #30
-            
-              /* Message decoding: PRIMITIVE
-                    mavlink_msg_attitude_decode(const mavlink_message_t* msg, mavlink_attitude_t* attitude)
-              */
-              mavlink_attitude_t attitude;
-              mavlink_msg_attitude_decode(&recv_m, &attitude);
-              this->roll = attitude.roll;
-			  this->pitch = attitude.pitch;
-			  this->yaw = attitude.yaw;
-            
-            break;
-	}
-	
-}

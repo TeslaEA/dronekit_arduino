@@ -29,10 +29,11 @@ class Dronekit
 	bool setVelocity();
 	
 	
-	int send_data( uint8_t* buf , uint16_t len);
-	mavlink_message_t receive_data();
-	int _port;
-	
+	size_t send_data( uint8_t* buf , uint16_t len);
+	mavlink_message_t receive_data(AsyncUDPPacket* packet);
+	int _hport;
+	int _cport;
+
 	bool armed;
 	int mode;
 	
