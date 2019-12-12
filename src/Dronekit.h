@@ -13,48 +13,42 @@
 class Dronekit
 {
   public:
-    Dronekit();
-	//WiFiUDP udp;
-	AsyncUDP udp;
+    Dronekit(); //конструктор
+	AsyncUDP udp; //класс асинхронного udp соединения
 
-    	uint8_t connect(int,int);
-    	void close();
-	void request_data();
-	void update();
-	void arm();
-	void disarm();
-	bool setMode();
-	bool takeoff();
-	bool land();
-	bool setVelocity();
-	
-	
-	size_t send_data( uint8_t* buf , uint16_t len);
-	mavlink_message_t receive_data(AsyncUDPPacket* packet);
-	int _hport;
-	int _cport;
+    uint8_t connect(int,int); //функция подключения к коптеру
+    void close(); //функция отключения от коптера
+	void request_data(); //запрос данных от коптера
 
-	bool armed;
-	int mode;
-	
-	uint16_t bat_volt;
-	int16_t bat_amp;
-	
-	float roll;
-	float pitch;
-	float yaw;
+	void arm(); //запуск моторов
+	void disarm(); //остановка моторов
+	bool setMode(); //установить режим
+	bool takeoff(); //автоматический взлет
+	bool land(); //автоматическая посадка
+	bool setVelocity(); //установить текущую скорость
 	
 	
-	int max_stream = 1;
-	int stream_rate[];
-	int stream_msg[];
+	size_t send_data( uint8_t* buf , uint16_t len); //отправка данных по udp
+	mavlink_message_t receive_data(AsyncUDPPacket* packet); //парсинг данных
+	void heartbeat();
 	
+	bool armed; //моторы запущены?
+	int mode; //текущий режим?
 	
+	uint16_t bat_volt; //текущее напряжение акб?
+	int16_t bat_amp; //текущее ток акб?
+	
+	float roll;  //текущий угол тангажа
+	float pitch; //текущий угол крена
+	float yaw; //текущий курс
+	
+	int max_stream = 1; //максимальное количество запрашиваемых потоков
+	int stream_rate[]; //скорость обновления запрашиваемых потоков
+	int stream_msg[]; //запрашиваемые потоки
 	
   private:
-	uint8_t _buf_len = 1000;
-	
-	
+	int _hport; //хост порт
+	int _cport; //клиент порт
 };
  
  

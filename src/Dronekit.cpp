@@ -12,7 +12,6 @@ Dronekit::Dronekit()
 
 uint8_t Dronekit::connect(int h_port, int c_port)
 {
-	_buf_len = 500;
 	_hport = h_port;
 	_cport = c_port;
 	
@@ -20,10 +19,7 @@ uint8_t Dronekit::connect(int h_port, int c_port)
         	Serial.println("UDP connected");
         	udp.onPacket([this](AsyncUDPPacket packet) 
 			{
-			this->receive_data(&packet);	
-			//Serial.print("recv:");
-			//Serial.write(packet.data(), packet.length());
-            //Serial.println();
+			this->receive_data(&packet);	//принимаем сообщение и разбираем его
 			});
 	}
 	return 1;
@@ -91,7 +87,10 @@ void Dronekit::request_data()
 	
   }
 }
-
+void Dronekit::heartbeat()
+{
+	
+}
 void Dronekit::arm()
 {
 	mavlink_message_t msg;
@@ -116,9 +115,7 @@ void Dronekit::disarm()
 
 mavlink_message_t Dronekit::receive_data(AsyncUDPPacket *packet)
 {
-	//packet.data(), 
-	//uint8_t packetBuffer[_buf_len] ;
-	//memset(packetBuffer, 0, _buf_len);
+
 	if (packet->length()) 
 	{
 		mavlink_message_t msg;
@@ -135,6 +132,8 @@ mavlink_message_t Dronekit::receive_data(AsyncUDPPacket *packet)
 					mavlink_msg_heartbeat_decode(&msg, &hb);
 					if (hb.base_mode == 209) {this->armed = true;} else {this->armed = false;}
 					this->mode = hb.custom_mode;
+					this->request_data();
+					this->heartbeat();
 		
 					break;
 				case MAVLINK_MSG_ID_SYS_STATUS:  // #1: SYS_STATUS
