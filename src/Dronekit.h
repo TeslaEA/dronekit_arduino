@@ -16,7 +16,7 @@ class Dronekit
     Dronekit(); //конструктор
 	AsyncUDP udp; //класс асинхронного udp соединения
 
-    uint8_t connect(int,int); //функция подключения к коптеру
+    uint8_t connect(uint16_t,uint16_t); //функция подключения к коптеру
     void close(); //функция отключения от коптера
 	void request_data(); //запрос данных от коптера
 
@@ -42,13 +42,16 @@ class Dronekit
 	float pitch; //текущий угол крена
 	float yaw; //текущий курс
 	
+	uint16_t ack_com;
+	uint16_t ack_com_result;
+	
 	int max_stream = 1; //максимальное количество запрашиваемых потоков
 	int stream_rate[]; //скорость обновления запрашиваемых потоков
 	int stream_msg[]; //запрашиваемые потоки
 	
   private:
-	int _hport; //хост порт
-	int _cport; //клиент порт
+	uint16_t _hport; //хост порт
+	uint16_t _cport; //клиент порт
 };
  
  
