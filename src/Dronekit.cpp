@@ -10,25 +10,42 @@ Dronekit::Dronekit()
 	
 }
 
-uint8_t Dronekit::connect(int port)
+uint8_t Dronekit::connect(uint16_t h_port, uint16_t c_port)
 {
-	_buf_len = 500;
-	_port = port;
+	_hport = h_port;
+	_cport = c_port;
+	Serial.println(_cport,DEC);
+	Serial.println(_hport,DEC);
+	Serial.println(h_port,DEC);
+	Serial.println(c_port,DEC);
 	
-	uint8_t c = this->udp.begin(_port);
-	return c;
+	if(udp.listen( _hport)) {
+        	Serial.println("UDP connected");
+        	udp.onPacket([this](AsyncUDPPacket packet) 
+			{
+			this->receive_data(&packet);	//принимаем сообщение и разбираем его
+			});
+	return 1;
+	}
+	else{return 0;}
+	
 }
 
 void Dronekit::close()
 {
-	Dronekit::udp.stop();
+	Dronekit::udp.close();
 }
 
-int Dronekit::send_data( uint8_t* buf, uint16_t len)
-{
-	int result = this->udp.beginPacket(this->udp.remoteIP(), this->udp.remotePort());
-	this->udp.write(buf, len);
-	this->udp.endPacket();
+size_t Dronekit::send_data( uint8_t* buf, uint16_t len)
+{	
+	size_t result = this->udp.writeTo(buf,len,WiFi.gatewayIP(),this->_cport);
+	Serial.print("send:");
+	Serial.print(result);
+	Serial.print(" byte");
+	Serial.print(" To:");
+	Serial.print(WiFi.gatewayIP());
+	Serial.print(":");
+	Serial.println(this->_cport,DEC);
 	return result; 
 }
 
@@ -58,11 +75,10 @@ void Dronekit::request_data()
   */
 
   // To be setup according to the needed information to be requested from the Pixhawk
-  const int  maxStreams = 1;
-  const uint8_t MAVStreams[maxStreams] = {MAV_DATA_STREAM_ALL};
-  const uint16_t MAVRates[maxStreams] = {0x02};
+  this->stream_msg[this->max_stream] = {MAV_DATA_STREAM_RAW_CONTROLLER};
+  this->stream_rate[this->max_stream] = {0x01};
 
-  for (int i = 0; i < maxStreams; i++) {
+  for (int i = 0; i < this->max_stream; i++) {
     /*
        mavlink_msg_request_data_stream_pack(system_id, component_id,
           &msg,
@@ -76,31 +92,88 @@ void Dronekit::request_data()
 
     */
 
-    mavlink_msg_request_data_stream_pack(2, 200, &msg, 1, 0, MAVStreams[i], MAVRates[i], 1);
+    mavlink_msg_request_data_stream_pack(255, 1, &msg, 1, 1, this->stream_msg[i], this->stream_rate[i], 1);
+
     uint16_t len = mavlink_msg_to_send_buffer(buf, &msg);
-	
+
 	this->send_data(buf, len);
 	
   }
 }
-
-
-mavlink_message_t Dronekit::receive_data()
+void Dronekit::heartbeat()
 {
 	
-	uint8_t packetBuffer[_buf_len] ;
-	memset(packetBuffer, 0, _buf_len);
-	int packetSize = this->udp.parsePacket();
-	int p = this->udp.read(packetBuffer, _buf_len);
-	if (packetSize) 
+}
+void Dronekit::arm()
+{
+	mavlink_message_t msg;
+	uint8_t buf[MAVLINK_MAX_PACKET_LEN];
+	mavlink_msg_command_long_pack(255, 1, &msg,1,1, MAV_CMD_COMPONENT_ARM_DISARM, 0, 1, 21196,0, 0, 0, 0, 0);
+	uint16_t len = mavlink_msg_to_send_buffer(buf, &msg);
+
+	this->send_data(buf, len);
+
+}
+
+void Dronekit::disarm()
+{
+	mavlink_message_t msg;
+	uint8_t buf[MAVLINK_MAX_PACKET_LEN];
+	mavlink_msg_command_long_pack(255, 1, &msg,1,1, MAV_CMD_COMPONENT_ARM_DISARM, 0, 0, 21196,0, 0, 0, 0, 0);
+	uint16_t len = mavlink_msg_to_send_buffer(buf, &msg);
+
+	this->send_data(buf, len);
+	
+}
+
+mavlink_message_t Dronekit::receive_data(AsyncUDPPacket *packet)
+{
+
+	if (packet->length()) 
 	{
 		mavlink_message_t msg;
 		mavlink_status_t stat;
-		for (int i = 0; i < packetSize; ++i)
+		for (int i = 0; i < packet->length(); ++i)
 		{
-			if (mavlink_parse_char(MAVLINK_COMM_0, packetBuffer[i], &msg, &stat)) 
+			if (mavlink_parse_char(MAVLINK_COMM_0, packet->data()[i], &msg, &stat)) 
 			{
-				return msg;
+				switch (msg.msgid)
+				{
+				case MAVLINK_MSG_ID_HEARTBEAT:
+					mavlink_heartbeat_t hb;
+					mavlink_msg_heartbeat_decode(&msg, &hb);
+					if (hb.base_mode == 209) {this->armed = true;} else {this->armed = false;}
+					this->mode = hb.custom_mode;
+					//this->request_data();
+					//this->heartbeat();
+					break;
+					
+				case MAVLINK_MSG_ID_SYS_STATUS:  // #1: SYS_STATUS
+					mavlink_sys_status_t sys_status;
+					mavlink_msg_sys_status_decode(&msg, &sys_status);
+					this->bat_volt = sys_status.voltage_battery;
+					this->bat_amp = sys_status.current_battery;
+        			break;
+					
+				case MAVLINK_MSG_ID_ATTITUDE:  // #30
+              		mavlink_attitude_t attitude;
+              		mavlink_msg_attitude_decode(&msg, &attitude);
+              		this->roll = attitude.roll;
+					this->pitch = attitude.pitch;
+					this->yaw = attitude.yaw;
+					break;
+					
+				case MAVLINK_MSG_ID_COMMAND_ACK: // #77
+					mavlink_command_ack_t ack;
+					mavlink_msg_command_ack_decode(&msg, &ack);
+					ack_com = ack.command;
+					ack_com_result = ack.result;
+					Serial.print("ack:");
+					Serial.print(ack_com);
+					Serial.print("result:");
+					Serial.println(ack_com_result);
+            		break;
+				}
 			}
 		}
     }
